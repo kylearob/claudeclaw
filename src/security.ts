@@ -155,7 +155,8 @@ export function executeEmergencyKill(): void {
       } catch { /* launchctl failed, still exit */ }
     } else if (os.platform() === 'linux') {
       try {
-        execSync('systemctl --user stop "com.claudeclaw.*" 2>/dev/null', { stdio: 'ignore', timeout: 3000 });
+        // claudeclaw.service is the unit the setup wizard installs; agents use com.claudeclaw.*
+        execSync('systemctl --user stop claudeclaw.service "com.claudeclaw.*" 2>/dev/null', { stdio: 'ignore', timeout: 3000 });
       } catch { /* ok */ }
     }
   } catch { /* don't let anything prevent exit */ }
