@@ -253,21 +253,57 @@ async function transcribeAudioLocal(filePath: string): Promise<string> {
   }
 }
 
-// ── STT: Cascade (Groq → whisper-cpp local) ─────────────────────────────────
+// ── STT: Parakeet (local, onnx-asr) ─────────────────────────────────────────
+
+/**
+ * Transcribe an audio file with a local Parakeet script.
+ * PARAKEET_SCRIPT is called as `<script> <audio.wav> <out-prefix>` and must
+ * write `<out-prefix>.txt`. PARAKEET_PYTHON is the interpreter that has
+ * onnx-asr installed (defaults to python3).
+ */
+async function transcribeAudioParakeet(filePath: string): Promise<string> {
+  const env = readEnvFile(['PARAKEET_PYTHON', 'PARAKEET_SCRIPT']);
+  const python = env.PARAKEET_PYTHON || 'python3';
+  const script = env.PARAKEET_SCRIPT;
+  if (!script) throw new Error('PARAKEET_SCRIPT not set');
+
+  const workDir = fs.mkdtempSync(path.join(path.dirname(filePath), 'parakeet-'));
+  const wavPath = path.join(workDir, 'audio.wav');
+  const prefix = path.join(workDir, 'transcript');
+  try {
+    await execFileAsync('ffmpeg', ['-loglevel', 'error', '-i', filePath, '-ar', '16000', '-ac', '1', '-y', wavPath]);
+    await execFileAsync(python, [script, wavPath, prefix], { timeout: 5 * 60_000 });
+    return fs.readFileSync(`${prefix}.txt`, 'utf-8').split('\n').join(' ').trim();
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// ── STT: Cascade (Groq → Parakeet local → whisper-cpp local) ────────────────
 
 /**
  * Transcribe an audio file using the first available provider.
- * Priority: Groq Whisper (cloud) → whisper-cpp (local).
+ * Priority: Groq Whisper (cloud) → Parakeet (local) → whisper-cpp (local).
  */
 export async function transcribeAudio(filePath: string): Promise<string> {
-  const env = readEnvFile(['GROQ_API_KEY', 'WHISPER_MODEL_PATH']);
+  const env = readEnvFile(['GROQ_API_KEY', 'PARAKEET_SCRIPT', 'WHISPER_MODEL_PATH']);
 
   // Try Groq first (cloud, fast)
   if (env.GROQ_API_KEY) {
     try {
       return await transcribeAudioGroq(filePath);
     } catch (err) {
-      logger.warn({ err }, 'Groq Whisper failed, trying local whisper-cpp');
+      logger.warn({ err }, 'Groq Whisper failed, trying local transcription');
+    }
+  }
+
+  // Local Parakeet, if configured
+  if (env.PARAKEET_SCRIPT) {
+    try {
+      return await transcribeAudioParakeet(filePath);
+    } catch (err) {
+      if (!env.WHISPER_MODEL_PATH) throw err;
+      logger.warn({ err }, 'Parakeet failed, trying local whisper-cpp');
     }
   }
 
@@ -487,6 +523,7 @@ export async function synthesizeSpeech(text: string): Promise<Buffer> {
 export function voiceCapabilities(): { stt: boolean; tts: boolean } {
   const env = readEnvFile([
     'GROQ_API_KEY',
+    'PARAKEET_SCRIPT',
     'WHISPER_MODEL_PATH',
     'ELEVENLABS_API_KEY', 'ELEVENLABS_VOICE_ID',
     'GRADIUM_API_KEY', 'GRADIUM_VOICE_ID',
@@ -494,7 +531,7 @@ export function voiceCapabilities(): { stt: boolean; tts: boolean } {
   ]);
 
   return {
-    stt: !!env.GROQ_API_KEY || !!env.WHISPER_MODEL_PATH,
+    stt: !!env.GROQ_API_KEY || !!env.PARAKEET_SCRIPT || !!env.WHISPER_MODEL_PATH,
     tts: !!(env.ELEVENLABS_API_KEY && env.ELEVENLABS_VOICE_ID)
       || !!(env.GRADIUM_API_KEY && env.GRADIUM_VOICE_ID)
       || !!env.KOKORO_URL

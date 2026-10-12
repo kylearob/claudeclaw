@@ -27,6 +27,7 @@ vi.mock('./embeddings.js', () => ({
 }));
 
 vi.mock('./gemini.js', () => ({
+  memoryLlmEnabled: vi.fn(() => true),
   generateContent: vi.fn(() => Promise.resolve('[]')),
   parseJsonResponse: vi.fn(() => []),
 }));

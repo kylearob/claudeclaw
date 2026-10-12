@@ -21,6 +21,9 @@ function getClient(): GoogleGenAI {
  * Returns a float array (768 dimensions for text-embedding-004).
  */
 export async function embedText(text: string): Promise<number[]> {
+  // Embeddings are Gemini-only. Without a key, return no vector and callers
+  // fall back to FTS5 keyword search.
+  if (!GOOGLE_API_KEY) return [];
   const ai = getClient();
   const result = await ai.models.embedContent({
     model: EMBEDDING_MODEL,

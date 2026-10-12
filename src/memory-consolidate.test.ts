@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./gemini.js', () => ({
+  memoryLlmEnabled: vi.fn(() => true),
   generateContent: vi.fn(),
   parseJsonResponse: vi.fn(),
 }));

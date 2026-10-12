@@ -3,7 +3,7 @@ import path from 'path';
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
-import { AGENT_MAX_TURNS, PROJECT_ROOT, agentCwd } from './config.js';
+import { AGENT_MAX_TURNS, CLAUDE_CODE_PATH, PROJECT_ROOT, agentCwd } from './config.js';
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
 
@@ -60,6 +60,30 @@ function loadMcpServers(allowlist?: string[]): Record<string, McpStdioConfig> {
   }
 
   return merged;
+}
+
+/**
+ * Environment for the Claude Code subprocess.
+ * Reads secrets from .env without polluting process.env.
+ * CLAUDE_CODE_OAUTH_TOKEN is optional — the subprocess finds auth via ~/.claude/
+ * automatically. Only needed if you want to override which account is used.
+ */
+export function buildSdkEnv(): Record<string, string | undefined> {
+  const secrets = readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']);
+
+  const sdkEnv: Record<string, string | undefined> = { ...process.env };
+  if (secrets.CLAUDE_CODE_OAUTH_TOKEN) {
+    sdkEnv.CLAUDE_CODE_OAUTH_TOKEN = secrets.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+  if (secrets.ANTHROPIC_API_KEY) {
+    sdkEnv.ANTHROPIC_API_KEY = secrets.ANTHROPIC_API_KEY;
+  }
+  return sdkEnv;
+}
+
+/** SDK option that points at the installed Claude Code CLI, if configured. */
+export function claudeExecutableOption(): { pathToClaudeCodeExecutable?: string } {
+  return CLAUDE_CODE_PATH ? { pathToClaudeCodeExecutable: CLAUDE_CODE_PATH } : {};
 }
 
 export interface UsageInfo {
@@ -169,18 +193,7 @@ export async function runAgent(
   onStreamText?: (accumulatedText: string) => void,
   mcpAllowlist?: string[],
 ): Promise<AgentResult> {
-  // Read secrets from .env without polluting process.env.
-  // CLAUDE_CODE_OAUTH_TOKEN is optional — the subprocess finds auth via ~/.claude/
-  // automatically. Only needed if you want to override which account is used.
-  const secrets = readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']);
-
-  const sdkEnv: Record<string, string | undefined> = { ...process.env };
-  if (secrets.CLAUDE_CODE_OAUTH_TOKEN) {
-    sdkEnv.CLAUDE_CODE_OAUTH_TOKEN = secrets.CLAUDE_CODE_OAUTH_TOKEN;
-  }
-  if (secrets.ANTHROPIC_API_KEY) {
-    sdkEnv.ANTHROPIC_API_KEY = secrets.ANTHROPIC_API_KEY;
-  }
+  const sdkEnv = buildSdkEnv();
 
   let newSessionId: string | undefined;
   let resultText: string | null = null;
@@ -242,6 +255,9 @@ export async function runAgent(
 
         // Abort support — signals the SDK to kill the subprocess
         ...(abortController ? { abortController } : {}),
+
+        // Use the installed Claude Code CLI instead of the SDK's bundled copy
+        ...claudeExecutableOption(),
       },
     })) {
       const ev = event as Record<string, unknown>;

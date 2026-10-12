@@ -24,6 +24,10 @@ const envConfig = readEnvFile([
   'SECURITY_PIN_HASH',
   'IDLE_LOCK_MINUTES',
   'EMERGENCY_KILL_PHRASE',
+  'CLAUDE_CODE_PATH',
+  'MEMORY_LLM',
+  'MEMORY_MODEL',
+  'MEMORY_RELEVANCE_FEEDBACK',
 ]);
 
 // ── Multi-agent support ──────────────────────────────────────────────
@@ -154,6 +158,37 @@ export const DB_ENCRYPTION_KEY =
 // Google API key for Gemini (memory extraction + consolidation)
 export const GOOGLE_API_KEY =
   process.env.GOOGLE_API_KEY || envConfig.GOOGLE_API_KEY || '';
+
+// Path to the Claude Code CLI the Agent SDK should spawn. Empty = the CLI
+// bundled with the SDK package. Set this to reuse your installed `claude`
+// (its version, models, and plugins) instead of the bundled copy.
+export const CLAUDE_CODE_PATH = expandHome(
+  process.env.CLAUDE_CODE_PATH || envConfig.CLAUDE_CODE_PATH || '',
+);
+
+// Which model backend runs memory extraction, consolidation, relevance
+// feedback, and Mission Control auto-assign.
+//   'claude' — Claude via the Agent SDK (uses your Claude auth, no extra key)
+//   'gemini' — Gemini Flash (needs GOOGLE_API_KEY)
+//   'off'    — no background memory processing
+// Default: 'gemini' when GOOGLE_API_KEY is set, otherwise 'claude'.
+export type MemoryLlm = 'claude' | 'gemini' | 'off';
+const rawMemoryLlm = (process.env.MEMORY_LLM || envConfig.MEMORY_LLM || '').toLowerCase();
+export const MEMORY_LLM: MemoryLlm =
+  rawMemoryLlm === 'claude' || rawMemoryLlm === 'gemini' || rawMemoryLlm === 'off'
+    ? rawMemoryLlm
+    : (process.env.GOOGLE_API_KEY || envConfig.GOOGLE_API_KEY) ? 'gemini' : 'claude';
+
+// Model used when MEMORY_LLM=claude.
+export const MEMORY_MODEL =
+  process.env.MEMORY_MODEL || envConfig.MEMORY_MODEL || 'claude-haiku-4-5-20251001';
+
+// After each reply, ask the memory model which surfaced memories were useful
+// (boosts or penalizes their salience). One extra model call per message that
+// surfaced memories. Default: on for Gemini, off for Claude.
+export const MEMORY_RELEVANCE_FEEDBACK =
+  (process.env.MEMORY_RELEVANCE_FEEDBACK || envConfig.MEMORY_RELEVANCE_FEEDBACK ||
+    (MEMORY_LLM === 'gemini' ? 'true' : 'false')).toLowerCase() === 'true';
 
 // Streaming strategy for progressive Telegram updates.
 // 'global-throttle' (default): edits a placeholder message with streamed text,

@@ -1,4 +1,4 @@
-import { agentObsidianConfig, GOOGLE_API_KEY } from './config.js';
+import { agentObsidianConfig, GOOGLE_API_KEY, MEMORY_LLM, MEMORY_RELEVANCE_FEEDBACK } from './config.js';
 import {
   batchUpdateMemoryRelevance,
   decayMemories,
@@ -15,7 +15,7 @@ import {
   searchMemories,
 } from './db.js';
 import { cosineSimilarity, embedText } from './embeddings.js';
-import { generateContent, parseJsonResponse } from './gemini.js';
+import { generateContent, memoryLlmEnabled, parseJsonResponse } from './gemini.js';
 import { logger } from './logger.js';
 import { ingestConversationTurn } from './memory-ingest.js';
 import { buildObsidianContext } from './obsidian.js';
@@ -232,7 +232,7 @@ export async function evaluateMemoryRelevance(
   userMessage: string,
   assistantResponse: string,
 ): Promise<void> {
-  if (surfacedMemoryIds.length === 0 || !GOOGLE_API_KEY) return;
+  if (surfacedMemoryIds.length === 0 || !MEMORY_RELEVANCE_FEEDBACK || !memoryLlmEnabled()) return;
 
   try {
     // Build a list of memories with their content so Gemini can actually judge
@@ -249,7 +249,8 @@ Memories that were surfaced:
 ${memoryList}`;
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Evaluation timeout')), 5000),
+      // Claude calls spawn a subprocess, so they need longer than Gemini's API
+      setTimeout(() => reject(new Error('Evaluation timeout')), MEMORY_LLM === 'claude' ? 60_000 : 5000),
     );
     const raw = await Promise.race([generateContent(prompt), timeoutPromise]);
     const usefulIds = parseJsonResponse<number[]>(raw);

@@ -1,4 +1,4 @@
-import { generateContent, parseJsonResponse } from './gemini.js';
+import { generateContent, memoryLlmEnabled, parseJsonResponse } from './gemini.js';
 import { cosineSimilarity, embedText } from './embeddings.js';
 import { getMemoriesWithEmbeddings, saveStructuredMemory, saveMemoryEmbedding } from './db.js';
 import { logger } from './logger.js';
@@ -76,6 +76,7 @@ export async function ingestConversationTurn(
 ): Promise<boolean> {
   // Hard filter: skip very short messages and commands
   if (userMessage.length <= 15 || userMessage.startsWith('/')) return false;
+  if (!memoryLlmEnabled()) return false;
 
   try {
     const prompt = EXTRACTION_PROMPT
@@ -152,8 +153,8 @@ export async function ingestConversationTurn(
     );
     return true;
   } catch (err) {
-    // Gemini failure should never block the bot
-    logger.error({ err }, 'Memory ingestion failed (Gemini)');
+    // Memory model failure should never block the bot
+    logger.error({ err }, 'Memory ingestion failed');
     return false;
   }
 }
