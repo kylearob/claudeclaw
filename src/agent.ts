@@ -230,8 +230,9 @@ export async function runAgent(
         // Resume the previous session for this chat (persistent context)
         resume: sessionId,
 
-        // 'project' loads CLAUDE.md from cwd; 'user' loads ~/.claude/skills/ and user settings
-        settingSources: ['project', 'user'],
+        // 'project' loads CLAUDE.md from cwd; 'user' loads ~/.claude/skills/ and user settings;
+        // 'local' loads MCP servers added with `claude mcp add` (default scope) for this cwd
+        settingSources: ['project', 'user', 'local'],
 
         // Skip all permission prompts — this is a trusted personal bot on your own machine
         permissionMode: 'bypassPermissions',
