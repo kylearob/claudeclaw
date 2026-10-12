@@ -46,25 +46,21 @@ if (AGENT_ID !== 'main') {
   });
   logger.info({ agentId: AGENT_ID, name: agentConfig.name }, 'Running as agent');
 } else {
-  // For main bot: read CLAUDE.md from CLAUDECLAW_CONFIG and inject it as
-  // systemPrompt — the same pattern used by sub-agents. Never copy the file
-  // into the repo; that defeats the purpose of CLAUDECLAW_CONFIG and risks
-  // accidentally committing personal config.
+  // For main bot: when CLAUDECLAW_CONFIG has a CLAUDE.md, run Claude Code
+  // from that directory, the same way sub-agents run from their own dir.
+  // Claude Code then loads it natively as project memory on every turn
+  // (surviving compaction and resumed sessions), the repo's template
+  // CLAUDE.md stays out of the context, and scheduled tasks get the same
+  // instructions. Never copy the file into the repo; that risks committing
+  // personal config.
   const externalClaudeMd = path.join(CLAUDECLAW_CONFIG, 'CLAUDE.md');
   if (fs.existsSync(externalClaudeMd)) {
-    let systemPrompt: string | undefined;
-    try {
-      systemPrompt = fs.readFileSync(externalClaudeMd, 'utf-8');
-    } catch { /* unreadable */ }
-    if (systemPrompt) {
-      setAgentOverrides({
-        agentId: 'main',
-        botToken: activeBotToken,
-        cwd: PROJECT_ROOT,
-        systemPrompt,
-      });
-      logger.info({ source: externalClaudeMd }, 'Loaded CLAUDE.md from CLAUDECLAW_CONFIG');
-    }
+    setAgentOverrides({
+      agentId: 'main',
+      botToken: activeBotToken,
+      cwd: CLAUDECLAW_CONFIG,
+    });
+    logger.info({ source: externalClaudeMd }, 'Using CLAUDECLAW_CONFIG as working directory');
   } else if (!fs.existsSync(path.join(PROJECT_ROOT, 'CLAUDE.md'))) {
     logger.warn(
       'No CLAUDE.md found. Copy CLAUDE.md.example to %s/CLAUDE.md and customize it.',
