@@ -181,7 +181,7 @@ export const MEMORY_LLM: MemoryLlm =
 
 // Model used when MEMORY_LLM=claude.
 export const MEMORY_MODEL =
-  process.env.MEMORY_MODEL || envConfig.MEMORY_MODEL || 'claude-haiku-4-5-20251001';
+  process.env.MEMORY_MODEL || envConfig.MEMORY_MODEL || 'claude-haiku-5-5';
 
 // After each reply, ask the memory model which surfaced memories were useful
 // (boosts or penalizes their salience). One extra model call per message that
